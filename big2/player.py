@@ -1,25 +1,22 @@
-import time
-
-import pygame.time
-
+import pygame
 from big2.card_sprite import *
 
-from big2.board import Board
 
 from big2.constants import WIDTH, CARD_SIZE_PLUS_SP, \
-    CARD_CENTER_X, CARD_CENTER_Y, BOTTOM_CARD_HEIGHT, PLAYER2_INIT_X, PLAYER3_INIT_Y, PLAYER4_INIT_X
+    CARD_CENTER_X, CARD_CENTER_Y, BOTTOM_CARD_HEIGHT, PLAYER2_INIT_X, PLAYER3_INIT_Y, \
+    PLAYER4_INIT_X, HEIGHT
 from operator import attrgetter
 
 
 class Player:
-    def __init__(self):
+    def __init__(self, group: pygame.sprite.LayeredUpdates):
         self.card_list: list[CardSprite] = []
         self.selected_cards: list[CardSprite] = []
         self.no_of_cards = 13
         self.card_playable = False
         self.to_reset_select = False
         self.ready = False
-
+        self.group = group
         # selected card power
         self.power = None
         self.card_type = None
@@ -46,13 +43,13 @@ class Player:
         return self.ready
 
     @staticmethod
-    def cal_loc_first_card(x, y, is_top):
+    def cal_loc_first_card(no_of_cards, x, y, is_top):
         if is_top:
-            first_x = (WIDTH - x * CARD_SIZE_PLUS_SP) / 2
+            first_x = (WIDTH - no_of_cards * CARD_SIZE_PLUS_SP) / 2
             first_y = y
         else:
             first_x = x
-            first_y = (WIDTH - y * CARD_SIZE_PLUS_SP) / 2
+            first_y = (HEIGHT - no_of_cards * CARD_SIZE_PLUS_SP) / 2
         return first_x, first_y
 
     def sort(self):
@@ -61,7 +58,7 @@ class Player:
         for card in self.card_list:
             card.change_coord(CARD_CENTER_X, BOTTOM_CARD_HEIGHT, False)
         self.selected_cards = []
-        x, y = self.cal_loc_first_card(len(self.card_list), BOTTOM_CARD_HEIGHT, True)
+        x, y = self.cal_loc_first_card(len(self.card_list), 0, BOTTOM_CARD_HEIGHT, True)
         for card3 in self.card_list:
             card3.change_coord(x, y, False)
             x = x + CARD_SIZE_PLUS_SP
@@ -80,17 +77,21 @@ class Player:
         lt: list[CardSprite] = sorted(self.selected_cards, key=lambda x: (x.value, x.suit))
         # check for A 2 3 4 5
         ace_straight = list(map(lambda x: cr.index(x), ['3', '4', '5', 'A', '2']))
+        two_straight = list(map(lambda x: cr.index(x), ['3', '4', '5', '6', '2']))
         invalid_straight = list(map(lambda x: cr.index(x), ['J', 'Q', 'K', 'A', '2']))
 
         def check_for_edge_straight(straight):
             for i in range(len(lt)):
-                if straight[0] != lt[0].value:
+                if straight[i] != lt[i].value:
                     return False
             return True
 
         is_ace_st = check_for_edge_straight(ace_straight)
+        is_two_st = check_for_edge_straight(two_straight)
         is_invalid_st = check_for_edge_straight(invalid_straight)
         if is_ace_st:
+            return True
+        if is_two_st:
             return True
         if is_invalid_st:
             return False
@@ -123,7 +124,8 @@ class Player:
         self.no_played_cards = no_played_cards
 
     def get_playable_cards(self):
-        return self.suit, self.power, self.card_type, self.no_played_cards
+        # need to duplicate selected cards all else address is deleted
+        return self.suit, self.power, self.card_type, self.no_played_cards, self.selected_cards[:]
 
     def check(self):
         no_of_cards = len(self.selected_cards)
@@ -171,7 +173,7 @@ class Player:
             self.set_playable_cards()
 
     # check with the board if card is playable
-    def check_play(self, board: Board):
+    def check_play(self, board):
         board.play_card(self)
 
     def remove_card(self, card: CardSprite):
@@ -179,32 +181,35 @@ class Player:
         self.selected_cards.remove(card)
 
     def play_card(self, to_flip, player_type):
-        x, y = self.cal_loc_first_card(len(self.selected_cards), CARD_CENTER_Y, True)
-        if player_type % 2 != 0:
-            x -= 36
+        x, y = 0, 0
+        if player_type % 2 == 0:
+            x, y = self.cal_loc_first_card(len(self.selected_cards), 0, CARD_CENTER_Y, True)
         else:
-            x -= 25
+            x, y = self.cal_loc_first_card(len(self.selected_cards), CARD_CENTER_X, 0, False)
         self.selected_cards.sort(key=lambda x: (x.value, x.suit))
         for card in self.selected_cards:
             if to_flip:
                 card.flip()
-            card.update_layer()
-            card.change_coord(x, CARD_CENTER_Y, True)
+            self.group.change_layer(card, big2.constants.layer)
+            big2.constants.layer += 1
+
             if player_type % 2 == 0:
+                card.change_coord(x, CARD_CENTER_Y, True)
                 x += CARD_SIZE_PLUS_SP
             else:
+                card.change_coord(CARD_CENTER_X - 12, y, True)
                 y += CARD_SIZE_PLUS_SP
         return self.get_playable_cards()
 
     def shuffle(self, player_type):
         if player_type == 0:
-            new_x, new_y = self.cal_loc_first_card(len(self.card_list), BOTTOM_CARD_HEIGHT, True)
+            new_x, new_y = self.cal_loc_first_card(len(self.card_list), 0, BOTTOM_CARD_HEIGHT, True)
         elif player_type == 1:
-            new_x, new_y = self.cal_loc_first_card(PLAYER2_INIT_X, len(self.card_list), False)
+            new_x, new_y = self.cal_loc_first_card(len(self.card_list), PLAYER2_INIT_X, 0, False)
         elif player_type == 2:
-            new_x, new_y = self.cal_loc_first_card(len(self.card_list), PLAYER3_INIT_Y, True)
+            new_x, new_y = self.cal_loc_first_card(len(self.card_list), 0, PLAYER3_INIT_Y, True)
         else:
-            new_x, new_y = self.cal_loc_first_card(PLAYER4_INIT_X, len(self.card_list), False)
+            new_x, new_y = self.cal_loc_first_card(len(self.card_list), PLAYER4_INIT_X, 0, False)
 
         for card_in_list in self.card_list:
             card_in_list.change_coord(new_x, new_y, False)

@@ -8,7 +8,6 @@ from big2.constants import INITIAL_LOC_X, INITIAL_LOC_Y, CARD_RANK as cr, SUIT_R
 import big2.constants
 
 
-
 class CardSprite(pygame.sprite.Sprite):
     def __init__(self, card_name, dest_x, dest_y, angle, is_back):
         super().__init__()
@@ -87,7 +86,4 @@ class CardSprite(pygame.sprite.Sprite):
     def update_layer(self):
         self._layer = big2.constants.layer
         big2.constants.layer += 1
-        print(big2.constants.layer)
-
-
-
+        print(big2.constants.layer, self.value)
